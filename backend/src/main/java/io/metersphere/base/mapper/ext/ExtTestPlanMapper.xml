@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="io.metersphere.base.mapper.ext.ExtTestPlanMapper">
+
+    <resultMap id="BaseResultMap" type="io.metersphere.track.dto.TestPlanDTO"
+               extends="io.metersphere.base.mapper.TestPlanMapper.BaseResultMap">
+        <result column="project_name" property="projectName"/>
+    </resultMap>
+    <sql id="condition">
+        <choose>
+            <when test='${object}.operator == "like"'>
+                like CONCAT('%', #{${object}.value},'%')
+            </when>
+            <when test='${object}.operator == "not like"'>
+                not like CONCAT('%', #{${object}.value},'%')
+            </when>
+            <when test='${object}.operator == "in"'>
+                in
+                <foreach collection="${object}.value" item="v" separator="," open="(" close=")">
+                    #{v}
+                </foreach>
+            </when>
+            <when test='${object}.operator == "not in"'>
+                not in
+                <foreach collection="${object}.value" item="v" separator="," open="(" close=")">
+                    #{v}
+                </foreach>
+            </when>
+            <when test='${object}.operator == "between"'>
+                between #{${object}.value[0]} and #{${object}.value[1]}
+            </when>
+            <when test='${object}.operator == "gt"'>
+                &gt; #{${object}.value}
+            </when>
+            <when test='${object}.operator == "lt"'>
+                &lt; #{${object}.value}
+            </when>
+            <when test='${object}.operator == "ge"'>
+                &gt;= #{${object}.value}
+            </when>
+            <when test='${object}.operator == "le"'>
+                &lt;= #{${object}.value}
+            </when>
+            <when test='${object}.operator == "current user"'>
+                = '${@io.metersphere.commons.utils.SessionUtils@getUserId()}'
+            </when>
+            <otherwise>
+                = #{${object}.value}
+            </otherwise>
+        </choose>
+    </sql>
+
+    <sql id="combine">
+        <if test='${condition}.name != null and (${name} == null or ${name} == "")'>
+            and test_plan.name
+            <include refid="condition">
+                <property name="object" value="${condition}.name"/>
+            </include>
+        </if>
+        <if test="${condition}.projectName != null">
+            and project.name
+            <include refid="condition">
+                <property name="object" value="${condition}.projectName"/>
+            </include>
+        </if>
+        <if test="${condition}.principal != null">
+            and test_plan.principal
+            <include refid="condition">
+                <property name="object" value="${condition}.principal"/>
+            </include>
+        </if>
+        <if test="${condition}.createTime != null">
+            and test_plan.create_time
+            <include refid="condition">
+                <property name="object" value="${condition}.createTime"/>
+            </include>
+        </if>
+        <if test="${condition}.status != null">
+            and test_plan.status
+            <include refid="condition">
+                <property name="object" value="${condition}.status"/>
+            </include>
+        </if>
+        <if test="${condition}.updateTime != null">
+            and test_plan.update_time
+            <include refid="condition">
+                <property name="object" value="${condition}.updateTime"/>
+            </include>
+        </if>
+        <if test="${condition}.stage != null">
+            and test_plan.stage
+            <include refid="condition">
+                <property name="object" value="${condition}.stage"/>
+            </include>
+        </if>
+    </sql>
+
+    <select id="list" resultMap="BaseResultMap"
+            parameterType="io.metersphere.track.request.testcase.QueryTestPlanRequest">
+        select test_plan.*, project.name as project_name
+        from test_plan
+        left join project on test_plan.project_id = project.id
+        <where>
+            <if test="request.combine != null">
+                <include refid="combine">
+                    <property name="condition" value="request.combine"/>
+                    <property name="name" value="request.name"/>
+                </include>
+            </if>
+            <if test="request.name != null">
+                and test_plan.name like CONCAT('%', #{request.name},'%')
+            </if>
+            <if test="request.workspaceId != null">
+                AND project.workspace_id = #{request.workspaceId}
+            </if>
+            <if test="request.projectId != null">
+                AND project.id = #{request.projectId}
+            </if>
+            <if test="request.id != null">
+                AND test_plan.id = #{request.id}
+            </if>
+            <if test="request.filters != null and request.filters.size() > 0">
+                <foreach collection="request.filters.entrySet()" index="key" item="values">
+                    <if test="values != null and values.size() > 0">
+                        <choose>
+
+                            <when test="key=='stage'">
+                                and test_plan.stage in
+                                <foreach collection="values" item="value" separator="," open="(" close=")">
+                                    #{value}
+                                </foreach>
+                            </when>
+                            <otherwise>
+                                and test_plan.status in
+                                <foreach collection="values" item="value" separator="," open="(" close=")">
+                                    #{value}
+                                </foreach>
+                            </otherwise>
+                        </choose>
+                    </if>
+                </foreach>
+            </if>
+        </where>
+        <if test="request.orders != null and request.orders.size() > 0">
+            order by
+            <foreach collection="request.orders" separator="," item="order">
+                test_plan.${order.name} ${order.type}
+            </foreach>
+        </if>
+    </select>
+
+    <select id="listRelate" resultType="io.metersphere.track.dto.TestPlanDTOWithMetric">
+        select test_plan.*, project.name as project_name
+        from test_plan
+        left join project on test_plan.project_id = project.id
+        where test_plan.workspace_id = #{request.workspaceId}
+        and (test_plan.principal = #{request.principal}
+        <if test="request.planIds != null and request.planIds.size() > 0">
+            or test_plan.id in
+            <foreach collection="request.planIds" item="planId" open="(" close=")" separator=",">
+                #{planId}
+            </foreach>
+        </if>
+        )
+        order by test_plan.update_time desc
+    </select>
+</mapper>
